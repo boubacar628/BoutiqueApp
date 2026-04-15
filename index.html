@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="Referrer-Policy" content="no-referrer" />
+  <meta http-equiv="Permissions-Policy" content="geolocation=(), camera=(), microphone=()" />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- PWA -->
+  <title>BoutiqueApp — Mini ERP</title>
+  <meta name="application-name" content="BoutiqueApp" />
+  <meta name="description" content="Mini ERP pour boutiques africaines — Caisse, Stock, Dettes, Livraisons" />
+  <meta name="theme-color" content="#1A6EFF" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="BoutiqueApp" />
+  <meta name="msapplication-TileColor" content="#1A6EFF" />
+  <meta name="msapplication-TileImage" content="icons/icon-144x144.png" />
+  <meta name="msapplication-tap-highlight" content="no" />
+
+  <!-- Manifest PWA -->
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Favicons & App Icons -->
+  <link rel="icon" type="image/png" sizes="32x32"  href="icons/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png" />
+  <link rel="apple-touch-icon" sizes="180x180"       href="icons/apple-touch-icon.png" />
+  <link rel="apple-touch-icon" sizes="152x152"       href="icons/icon-152x152.png" />
+  <link rel="apple-touch-icon" sizes="144x144"       href="icons/icon-144x144.png" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+
+<!-- ===================== LOCK SCREEN ===================== -->
+<div id="lock-screen" class="lock-screen">
+  <div class="lock-container">
+    <div class="lock-logo">
+      <div class="lock-logo-icon"><i class="fa-solid fa-store"></i></div>
+      <div class="lock-logo-name">BoutiqueApp</div>
+      <div class="lock-logo-sub">Mini ERP · Sécurisé</div>
+    </div>
+
+    <!-- Étape 1 : Nom boutique -->
+    <div id="step-shopname" class="pin-box hidden">
+      <div class="pin-title"><i class="fa-solid fa-store"></i> Bienvenue !</div>
+      <div class="pin-sub">Configurez votre boutique avant de commencer</div>
+      <div class="form-group mt-16">
+        <label>Nom de la boutique *</label>
+        <input type="text" id="setup-shop-name" placeholder="Ex: Boutique Aminata" maxlength="50" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>Propriétaire</label>
+        <input type="text" id="setup-owner" placeholder="Votre prénom" maxlength="50" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label>Seuil alerte stock faible</label>
+        <input type="number" id="setup-threshold" placeholder="5" min="1" max="999" />
+      </div>
+      <button class="btn btn-primary mt-8" onclick="setupGotoPin()">
+        <i class="fa-solid fa-arrow-right"></i> Créer un code PIN
+      </button>
+    </div>
+
+    <!-- Étape 2 : Créer PIN -->
+    <div id="step-create-pin" class="pin-box hidden">
+      <div class="pin-title"><i class="fa-solid fa-lock"></i> Créez votre PIN</div>
+      <div class="pin-sub" id="create-pin-sub">Choisissez un code à 4 chiffres</div>
+      <div class="pin-dots" id="create-pin-dots">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="pin-pad" id="create-pin-pad"></div>
+    </div>
+
+    <!-- Écran login -->
+    <div id="step-login" class="pin-box hidden">
+      <div class="pin-title"><i class="fa-solid fa-shield-halved"></i> Accès sécurisé</div>
+      <div class="pin-sub" id="login-pin-sub">Entrez votre code PIN</div>
+      <div class="pin-dots" id="login-pin-dots">
+        <span></span><span></span><span></span><span></span>
+      </div>
+      <div class="pin-pad" id="login-pin-pad"></div>
+      <div id="pin-error" class="pin-error hidden"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===================== APPLICATION ===================== -->
+<div id="app" class="app-wrapper hidden">
+
+  <!-- Toast -->
+  <div id="toast" class="toast hidden" role="alert" aria-live="assertive">
+    <i id="toast-icon"></i><span id="toast-msg"></span>
+  </div>
+
+  <!-- Confirm dialog -->
+  <div id="confirm-overlay" class="modal-overlay hidden">
+    <div class="modal confirm-modal" onclick="event.stopPropagation()">
+      <div class="modal-title" id="confirm-title">Confirmation</div>
+      <div class="confirm-body" id="confirm-msg"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="confirmReply(false)">Annuler</button>
+        <button class="btn btn-danger-solid" onclick="confirmReply(true)">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon"><i class="fa-solid fa-store"></i></div>
+        <div>
+          <div class="logo-title" id="shop-name-header">BoutiqueApp</div>
+          <div class="logo-sub" id="header-date"></div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" onclick="navTo('settings')" title="Paramètres" aria-label="Paramètres">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+        <button class="icon-btn" onclick="verrouillerApp()" title="Verrouiller" aria-label="Verrouiller">
+          <i class="fa-solid fa-lock"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-main">
+
+    <!-- ===== DASHBOARD ===== -->
+    <section id="section-dashboard" class="section active">
+      <div class="dashboard-greeting" id="dashboard-greeting">Bonjour 👋</div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-blue" onclick="navTo('caisse')" role="button" tabindex="0">
+          <div class="kpi-icon"><i class="fa-solid fa-arrow-trend-up"></i></div>
+          <div class="kpi-val" id="kpi-ventes">0</div>
+          <div class="kpi-label">Ventes aujourd'hui</div>
+        </div>
+        <div class="kpi-card kpi-green" onclick="navTo('stock')" role="button" tabindex="0">
+          <div class="kpi-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+          <div class="kpi-val" id="kpi-stock">0</div>
+          <div class="kpi-label">Produits en stock</div>
+        </div>
+        <div class="kpi-card kpi-orange" onclick="navTo('dettes')" role="button" tabindex="0">
+          <div class="kpi-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+          <div class="kpi-val" id="kpi-dettes">0</div>
+          <div class="kpi-label">Dettes actives</div>
+        </div>
+        <div class="kpi-card kpi-purple" onclick="navTo('livraisons')" role="button" tabindex="0">
+          <div class="kpi-icon"><i class="fa-solid fa-truck"></i></div>
+          <div class="kpi-val" id="kpi-livraisons">0</div>
+          <div class="kpi-label">Livraisons en cours</div>
+        </div>
+      </div>
+
+      <div id="dashboard-alerts" class="alert-box hidden">
+        <div class="alert-title"><i class="fa-solid fa-triangle-exclamation"></i> Alertes stock faible</div>
+        <div id="alerts-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-chart-bar"></i> Ventes — 7 derniers jours</div>
+        <canvas id="chart-ventes" height="150"></canvas>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-wallet"></i> Résumé du mois</div>
+        <div class="fin-grid">
+          <div class="fin-item">
+            <div class="fin-val green" id="fin-recettes">0 F</div>
+            <div class="fin-label">Recettes</div>
+          </div>
+          <div class="fin-item">
+            <div class="fin-val red" id="fin-couts">0 F</div>
+            <div class="fin-label">Coût achats</div>
+          </div>
+          <div class="fin-item">
+            <div class="fin-val blue" id="fin-marge">0 F</div>
+            <div class="fin-label">Marge brute</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Activité récente</div>
+        <div id="dashboard-recent" class="list-container"></div>
+      </div>
+    </section>
+
+    <!-- ===== CAISSE ===== -->
+    <section id="section-caisse" class="section">
+      <div class="section-hero caisse-hero">
+        <div class="hero-icon"><i class="fa-solid fa-cash-register"></i></div>
+        <div>
+          <div class="hero-title">Caisse</div>
+          <div class="hero-sub" id="caisse-today">Chargement...</div>
+        </div>
+      </div>
+
+      <div class="tab-bar">
+        <button class="tab active" onclick="switchTab('caisse','normal',this)">Vente rapide</button>
+        <button class="tab" onclick="switchTab('caisse','remise',this)">Avec remise</button>
+        <button class="tab" onclick="switchTab('caisse','credit',this)">À crédit</button>
+      </div>
+
+      <!-- Tab: Vente normale -->
+      <div id="caisse-tab-normal" class="card tab-panel">
+        <div class="card-title"><i class="fa-solid fa-plus-circle"></i> Nouvelle vente</div>
+        <div class="form-group">
+          <label>Produit *</label>
+          <select id="v-produit" onchange="onVenteProdChange('v')"></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantité *</label>
+            <input type="number" id="v-qte" placeholder="1" min="1" oninput="calcTotal('v')" />
+          </div>
+          <div class="form-group">
+            <label>Prix unitaire</label>
+            <input type="number" id="v-prix" placeholder="0" oninput="calcTotal('v')" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Mode paiement</label>
+            <select id="v-mode">
+              <option value="Espèces">💵 Espèces</option>
+              <option value="Mobile Money">📱 Mobile Money</option>
+              <option value="Virement">🏦 Virement</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Client (optionnel)</label>
+            <input type="text" id="v-client" placeholder="Nom client..." maxlength="60" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Note</label>
+          <input type="text" id="v-note" placeholder="Commentaire..." maxlength="100" />
+        </div>
+        <div class="total-preview" id="v-total">Total : 0 FCFA</div>
+        <button class="btn btn-primary" onclick="validerVente('normal')">
+          <i class="fa-solid fa-check"></i> Valider la vente
+        </button>
+      </div>
+
+      <!-- Tab: Avec remise -->
+      <div id="caisse-tab-remise" class="card tab-panel hidden">
+        <div class="card-title"><i class="fa-solid fa-tag"></i> Vente avec remise</div>
+        <div class="form-group">
+          <label>Produit *</label>
+          <select id="r-produit" onchange="onVenteProdChange('r')"></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantité *</label>
+            <input type="number" id="r-qte" placeholder="1" min="1" oninput="calcRemise()" />
+          </div>
+          <div class="form-group">
+            <label>Prix normal</label>
+            <input type="number" id="r-prix" placeholder="0" readonly />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Remise %</label>
+            <input type="number" id="r-pct" placeholder="0" min="0" max="100" oninput="calcRemise()" />
+          </div>
+          <div class="form-group">
+            <label>ou Remise FCFA</label>
+            <input type="number" id="r-fcfa" placeholder="0" min="0" oninput="calcRemise()" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Mode paiement</label>
+          <select id="r-mode">
+            <option value="Espèces">💵 Espèces</option>
+            <option value="Mobile Money">📱 Mobile Money</option>
+            <option value="Virement">🏦 Virement</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Client (optionnel)</label>
+          <input type="text" id="r-client" placeholder="Nom client..." maxlength="60" />
+        </div>
+        <div class="total-preview" id="r-total">Total après remise : 0 FCFA</div>
+        <button class="btn btn-primary" onclick="validerVente('remise')">
+          <i class="fa-solid fa-check"></i> Valider avec remise
+        </button>
+      </div>
+
+      <!-- Tab: Crédit -->
+      <div id="caisse-tab-credit" class="card tab-panel hidden">
+        <div class="card-title"><i class="fa-solid fa-credit-card"></i> Vente à crédit</div>
+        <div class="info-banner"><i class="fa-solid fa-circle-info"></i> Une dette sera créée automatiquement pour ce client.</div>
+        <div class="form-group">
+          <label>Produit *</label>
+          <select id="c-produit" onchange="onVenteProdChange('c')"></select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantité *</label>
+            <input type="number" id="c-qte" placeholder="1" min="1" oninput="calcTotal('c')" />
+          </div>
+          <div class="form-group">
+            <label>Prix unitaire</label>
+            <input type="number" id="c-prix" placeholder="0" oninput="calcTotal('c')" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nom du client *</label>
+          <input type="text" id="c-client" placeholder="Nom complet du client..." maxlength="60" />
+        </div>
+        <div class="form-group">
+          <label>Téléphone (optionnel)</label>
+          <input type="tel" id="c-tel" placeholder="+221..." maxlength="20" />
+        </div>
+        <div class="form-group">
+          <label>Date d'échéance</label>
+          <input type="date" id="c-echeance" />
+        </div>
+        <div class="total-preview orange-preview" id="c-total">Total à crédit : 0 FCFA</div>
+        <button class="btn btn-orange" onclick="validerVente('credit')">
+          <i class="fa-solid fa-handshake"></i> Valider à crédit
+        </button>
+      </div>
+
+      <!-- Historique ventes -->
+      <div class="card">
+        <div class="card-title">
+          <span><i class="fa-solid fa-clock-rotate-left"></i> Historique</span>
+          <div class="card-actions">
+            <button class="mini-btn" onclick="exporterCSV('ventes')"><i class="fa-solid fa-download"></i> CSV</button>
+          </div>
+        </div>
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="search-ventes" placeholder="Rechercher..." oninput="renderCaisse()" maxlength="60" />
+        </div>
+        <div class="filter-row">
+          <select id="filter-ventes-date" onchange="renderCaisse()">
+            <option value="today">Aujourd'hui</option>
+            <option value="week">Cette semaine</option>
+            <option value="month">Ce mois</option>
+            <option value="all">Tout</option>
+          </select>
+          <select id="filter-ventes-mode" onchange="renderCaisse()">
+            <option value="">Tous modes</option>
+            <option value="Espèces">Espèces</option>
+            <option value="Mobile Money">Mobile Money</option>
+            <option value="Virement">Virement</option>
+            <option value="Crédit">Crédit</option>
+          </select>
+        </div>
+        <div id="ventes-list" class="list-container"></div>
+        <div class="pagination" id="pg-ventes"></div>
+      </div>
+    </section>
+
+    <!-- ===== STOCK ===== -->
+    <section id="section-stock" class="section">
+      <div class="section-hero stock-hero">
+        <div class="hero-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+        <div>
+          <div class="hero-title">Stock</div>
+          <div class="hero-sub" id="stock-count">0 produit</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-plus-circle"></i> Ajouter / Réapprovisionner</div>
+        <div class="form-group">
+          <label>Nom du produit *</label>
+          <input type="text" id="prod-nom" placeholder="Ex: Riz, Savon, Huile..." maxlength="80" autocomplete="off" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Quantité *</label>
+            <input type="number" id="prod-qte" placeholder="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Catégorie</label>
+            <select id="prod-cat">
+              <option>Général</option><option>Alimentation</option><option>Boissons</option>
+              <option>Hygiène</option><option>Ménager</option><option>Électronique</option>
+              <option>Textile</option><option>Autre</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Prix achat (FCFA)</label>
+            <input type="number" id="prod-achat" placeholder="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Prix vente (FCFA) *</label>
+            <input type="number" id="prod-vente" placeholder="0" min="0" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Fournisseur</label>
+            <input type="text" id="prod-fournisseur" placeholder="Nom fournisseur..." maxlength="60" />
+          </div>
+          <div class="form-group">
+            <label>Seuil alerte</label>
+            <input type="number" id="prod-seuil" placeholder="Défaut global" min="1" />
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="ajouterProduit()">
+          <i class="fa-solid fa-plus"></i> Ajouter / Mettre à jour
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span><i class="fa-solid fa-list"></i> Inventaire</span>
+          <div class="card-actions">
+            <button class="mini-btn" onclick="exporterCSV('stock')"><i class="fa-solid fa-download"></i> CSV</button>
+          </div>
+        </div>
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="search-stock" placeholder="Rechercher un produit..." oninput="renderStock()" maxlength="60" />
+        </div>
+        <div class="filter-row">
+          <select id="filter-stock-cat" onchange="renderStock()">
+            <option value="">Toutes catégories</option>
+            <option>Alimentation</option><option>Boissons</option><option>Hygiène</option>
+            <option>Ménager</option><option>Électronique</option><option>Textile</option>
+            <option>Général</option><option>Autre</option>
+          </select>
+          <select id="filter-stock-etat" onchange="renderStock()">
+            <option value="">Tout le stock</option>
+            <option value="low">Stock faible ⚠️</option>
+            <option value="empty">Rupture 🔴</option>
+          </select>
+        </div>
+        <div id="stock-list" class="list-container"></div>
+        <div class="pagination" id="pg-stock"></div>
+      </div>
+    </section>
+
+    <!-- ===== DETTES ===== -->
+    <section id="section-dettes" class="section">
+      <div class="section-hero dettes-hero">
+        <div class="hero-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+        <div>
+          <div class="hero-title">Dettes Clients</div>
+          <div class="hero-sub" id="dettes-total">0 FCFA impayé</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-user-plus"></i> Enregistrer une dette</div>
+        <div class="form-group">
+          <label>Nom du client *</label>
+          <input type="text" id="dette-client" placeholder="Ex: Aminata Diallo..." maxlength="60" autocomplete="off" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Montant dû (FCFA) *</label>
+            <input type="number" id="dette-montant" placeholder="0" min="1" />
+          </div>
+          <div class="form-group">
+            <label>Date d'échéance</label>
+            <input type="date" id="dette-echeance" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <input type="text" id="dette-desc" placeholder="Produits achetés..." maxlength="120" />
+        </div>
+        <div class="form-group">
+          <label>Téléphone client</label>
+          <input type="tel" id="dette-tel" placeholder="+221 XX XXX XXXX" maxlength="20" />
+        </div>
+        <button class="btn btn-primary" onclick="ajouterDette()">
+          <i class="fa-solid fa-plus"></i> Enregistrer la dette
+        </button>
+      </div>
+
+      <!-- Paiement partiel -->
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-money-bill-wave"></i> Paiement partiel</div>
+        <div class="form-group">
+          <label>Sélectionner le client</label>
+          <select id="paiement-select"><option value="">— Client avec dette —</option></select>
+        </div>
+        <div class="form-group">
+          <label>Montant payé (FCFA) *</label>
+          <input type="number" id="paiement-montant" placeholder="0" min="1" />
+        </div>
+        <button class="btn btn-success-solid" onclick="paiementPartiel()">
+          <i class="fa-solid fa-coins"></i> Enregistrer le paiement
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span><i class="fa-solid fa-list"></i> Liste des dettes</span>
+          <div class="card-actions">
+            <button class="mini-btn" onclick="exporterCSV('dettes')"><i class="fa-solid fa-download"></i> CSV</button>
+          </div>
+        </div>
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="search-dettes" placeholder="Rechercher un client..." oninput="renderDettes()" maxlength="60" />
+        </div>
+        <div class="filter-row">
+          <select id="filter-dettes-statut" onchange="renderDettes()">
+            <option value="">Toutes</option>
+            <option value="active">Non payées</option>
+            <option value="partiel">Partiellement payées</option>
+            <option value="paye">Soldées</option>
+          </select>
+          <select id="filter-dettes-ech" onchange="renderDettes()">
+            <option value="">Toutes dates</option>
+            <option value="overdue">En retard ⚠️</option>
+            <option value="soon">Échéance proche</option>
+          </select>
+        </div>
+        <div id="dettes-list" class="list-container"></div>
+        <div class="pagination" id="pg-dettes"></div>
+      </div>
+    </section>
+
+    <!-- ===== LIVRAISONS ===== -->
+    <section id="section-livraisons" class="section">
+      <div class="section-hero livraisons-hero">
+        <div class="hero-icon"><i class="fa-solid fa-truck"></i></div>
+        <div>
+          <div class="hero-title">Livraisons</div>
+          <div class="hero-sub" id="livraisons-count">0 en cours</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-plus-circle"></i> Nouvelle livraison</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Client *</label>
+            <input type="text" id="livr-client" placeholder="Nom du client..." maxlength="60" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label>Téléphone</label>
+            <input type="tel" id="livr-tel" placeholder="+221..." maxlength="20" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Produit(s) *</label>
+          <input type="text" id="livr-produit" placeholder="Ex: 2 sacs riz, 5 bidons huile..." maxlength="120" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Adresse</label>
+            <input type="text" id="livr-adresse" placeholder="Quartier, rue..." maxlength="100" />
+          </div>
+          <div class="form-group">
+            <label>Statut</label>
+            <select id="livr-statut">
+              <option value="Préparation">📦 Préparation</option>
+              <option value="En cours">🚚 En cours</option>
+              <option value="Livré">✅ Livré</option>
+              <option value="Annulé">❌ Annulé</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Montant (FCFA)</label>
+            <input type="number" id="livr-montant" placeholder="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label>Date prévue</label>
+            <input type="date" id="livr-date" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <input type="text" id="livr-notes" placeholder="Instructions spéciales..." maxlength="120" />
+        </div>
+        <button class="btn btn-primary" onclick="ajouterLivraison()">
+          <i class="fa-solid fa-plus"></i> Créer la livraison
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span><i class="fa-solid fa-list"></i> Suivi</span>
+          <div class="card-actions">
+            <button class="mini-btn" onclick="exporterCSV('livraisons')"><i class="fa-solid fa-download"></i> CSV</button>
+          </div>
+        </div>
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="search-livr" placeholder="Rechercher..." oninput="renderLivraisons()" maxlength="60" />
+        </div>
+        <div class="filter-row">
+          <select id="filter-livr-statut" onchange="renderLivraisons()">
+            <option value="">Tous statuts</option>
+            <option value="Préparation">Préparation</option>
+            <option value="En cours">En cours</option>
+            <option value="Livré">Livré</option>
+            <option value="Annulé">Annulé</option>
+          </select>
+        </div>
+        <div id="livraisons-list" class="list-container"></div>
+        <div class="pagination" id="pg-livraisons"></div>
+      </div>
+    </section>
+
+    <!-- ===== PARAMÈTRES ===== -->
+    <section id="section-settings" class="section">
+      <div class="section-hero settings-hero">
+        <div class="hero-icon"><i class="fa-solid fa-gear"></i></div>
+        <div>
+          <div class="hero-title">Paramètres</div>
+          <div class="hero-sub">Configuration de la boutique</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-store"></i> Informations boutique</div>
+        <div class="form-group">
+          <label>Nom de la boutique</label>
+          <input type="text" id="settings-name" maxlength="50" />
+        </div>
+        <div class="form-group">
+          <label>Propriétaire</label>
+          <input type="text" id="settings-owner" maxlength="50" />
+        </div>
+        <div class="form-group">
+          <label>Seuil global d'alerte stock faible</label>
+          <input type="number" id="settings-threshold" min="1" max="999" />
+        </div>
+        <button class="btn btn-primary" onclick="sauvegarderSettings()">
+          <i class="fa-solid fa-save"></i> Enregistrer
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-shield-halved"></i> Sécurité — Changer PIN</div>
+        <div class="form-group">
+          <label>Ancien PIN</label>
+          <input type="password" id="old-pin" placeholder="4 chiffres" maxlength="4" inputmode="numeric" autocomplete="current-password" />
+        </div>
+        <div class="form-group">
+          <label>Nouveau PIN</label>
+          <input type="password" id="new-pin" placeholder="4 chiffres" maxlength="4" inputmode="numeric" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label>Confirmer nouveau PIN</label>
+          <input type="password" id="confirm-pin" placeholder="4 chiffres" maxlength="4" inputmode="numeric" autocomplete="new-password" />
+        </div>
+        <button class="btn btn-primary" onclick="changerPIN()">
+          <i class="fa-solid fa-key"></i> Changer le PIN
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-database"></i> Données</div>
+        <button class="btn btn-secondary mb-10" onclick="exporterJSON()">
+          <i class="fa-solid fa-download"></i> Exporter tout (JSON)
+        </button>
+        <button class="btn btn-secondary mb-10" onclick="triggerImport()">
+          <i class="fa-solid fa-upload"></i> Importer (JSON)
+        </button>
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importerJSON(event)" />
+        <button id="btn-install-pwa" class="btn btn-secondary mb-10 hidden" onclick="installPWA()">
+          <i class="fa-solid fa-mobile-screen-button"></i> Installer l'application
+        </button>
+        <button class="btn btn-danger-solid" onclick="reinitialiserApp()">
+          <i class="fa-solid fa-trash"></i> Réinitialiser toutes les données
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="fa-solid fa-circle-info"></i> À propos</div>
+        <div class="about-info">
+          <div class="about-name">BoutiqueApp <span class="badge badge-blue">v2.0</span></div>
+          <div class="text-muted">Mini ERP pour boutiques africaines</div>
+          <div class="about-pills">
+            <span class="pill"><i class="fa-solid fa-wifi-slash"></i> 100% hors ligne</span>
+            <span class="pill"><i class="fa-solid fa-lock"></i> PIN sécurisé</span>
+            <span class="pill"><i class="fa-solid fa-mobile-screen"></i> Mobile-first</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Nav -->
+  <nav class="bottom-nav" role="navigation">
+    <button class="nav-btn active" onclick="navTo('dashboard')" aria-label="Accueil">
+      <i class="fa-solid fa-house"></i><span>Accueil</span>
+    </button>
+    <button class="nav-btn" onclick="navTo('caisse')" aria-label="Caisse">
+      <i class="fa-solid fa-cash-register"></i><span>Caisse</span>
+    </button>
+    <button class="nav-btn" onclick="navTo('stock')" aria-label="Stock">
+      <i class="fa-solid fa-boxes-stacked"></i><span>Stock</span>
+    </button>
+    <button class="nav-btn" onclick="navTo('dettes')" aria-label="Dettes">
+      <i class="fa-solid fa-file-invoice-dollar"></i><span>Dettes</span>
+    </button>
+    <button class="nav-btn" onclick="navTo('livraisons')" aria-label="Livraisons">
+      <i class="fa-solid fa-truck"></i><span>Livraisons</span>
+    </button>
+  </nav>
+
+  <!-- Modal édition produit -->
+  <div id="modal-prod" class="modal-overlay hidden">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title"><i class="fa-solid fa-pen"></i> Modifier le produit</div>
+      <input type="hidden" id="ep-id" />
+      <div class="form-group"><label>Nom *</label><input type="text" id="ep-nom" maxlength="80" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Quantité</label><input type="number" id="ep-qte" min="0" /></div>
+        <div class="form-group"><label>Catégorie</label>
+          <select id="ep-cat"><option>Général</option><option>Alimentation</option><option>Boissons</option>
+          <option>Hygiène</option><option>Ménager</option><option>Électronique</option><option>Textile</option><option>Autre</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Prix achat</label><input type="number" id="ep-achat" min="0" /></div>
+        <div class="form-group"><label>Prix vente *</label><input type="number" id="ep-vente" min="0" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Fournisseur</label><input type="text" id="ep-fournisseur" maxlength="60" /></div>
+        <div class="form-group"><label>Seuil alerte</label><input type="number" id="ep-seuil" min="1" /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="fermerModal('modal-prod')">Annuler</button>
+        <button class="btn btn-primary" onclick="sauvegarderProduit()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal édition dette -->
+  <div id="modal-dette" class="modal-overlay hidden">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title"><i class="fa-solid fa-pen"></i> Modifier la dette</div>
+      <input type="hidden" id="ed-id" />
+      <div class="form-group"><label>Client</label><input type="text" id="ed-client" maxlength="60" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Montant total</label><input type="number" id="ed-montant" min="0" /></div>
+        <div class="form-group"><label>Déjà payé</label><input type="number" id="ed-paye" min="0" /></div>
+      </div>
+      <div class="form-group"><label>Description</label><input type="text" id="ed-desc" maxlength="120" /></div>
+      <div class="form-row">
+        <div class="form-group"><label>Téléphone</label><input type="tel" id="ed-tel" maxlength="20" /></div>
+        <div class="form-group"><label>Échéance</label><input type="date" id="ed-ech" /></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="fermerModal('modal-dette')">Annuler</button>
+        <button class="btn btn-primary" onclick="sauvegarderDette()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal livraison -->
+  <div id="modal-livr" class="modal-overlay hidden">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title"><i class="fa-solid fa-truck"></i> Modifier la livraison</div>
+      <input type="hidden" id="el-id" />
+      <div class="form-group"><label>Statut</label>
+        <select id="el-statut">
+          <option value="Préparation">📦 Préparation</option>
+          <option value="En cours">🚚 En cours</option>
+          <option value="Livré">✅ Livré</option>
+          <option value="Annulé">❌ Annulé</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Notes</label><input type="text" id="el-notes" maxlength="120" /></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="fermerModal('modal-livr')">Annuler</button>
+        <button class="btn btn-primary" onclick="sauvegarderLivraison()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script src="script.js"></script>
+<!-- Service Worker Registration + PWA Install -->
+<script>
+(function() {
+  'use strict';
+
+  /* --- Service Worker --- */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .then(reg => {
+          console.log('[SW] Enregistré :', reg.scope);
+          /* Détection mise à jour */
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                showUpdateBanner();
+              }
+            });
+          });
+        })
+        .catch(err => console.warn('[SW] Erreur :', err));
+    });
+  }
+
+  /* --- Bannière mise à jour --- */
+  function showUpdateBanner() {
+    const banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.style.cssText = `
+      position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+      background:#0F1B2A;color:#fff;padding:12px 18px;border-radius:50px;
+      font-size:13px;font-weight:600;z-index:9999;display:flex;gap:10px;
+      align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.3);
+      white-space:nowrap;max-width:92vw;
+    `;
+    banner.innerHTML = `
+      <i class="fa-solid fa-rotate" style="color:#4A90FF"></i>
+      Mise à jour disponible
+      <button onclick="applyUpdate()" style="background:#1A6EFF;color:#fff;border:none;
+        padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;">
+        Mettre à jour
+      </button>
+    `;
+    document.body.appendChild(banner);
+  }
+
+  window.applyUpdate = function() {
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+      window.location.reload();
+    }
+  };
+
+  /* --- PWA Install Prompt --- */
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    /* Afficher bouton install dans paramètres si dispo */
+    const btn = document.getElementById('btn-install-pwa');
+    if (btn) btn.classList.remove('hidden');
+  });
+
+  window.installPWA = function() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => { deferredPrompt = null; });
+    }
+  };
+
+  window.addEventListener('appinstalled', () => {
+    console.log('[PWA] Application installée.');
+    const btn = document.getElementById('btn-install-pwa');
+    if (btn) btn.classList.add('hidden');
+  });
+})();
+</script>
+</body>
+</html>
